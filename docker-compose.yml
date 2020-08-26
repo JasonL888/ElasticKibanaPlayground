@@ -1,12 +1,14 @@
 version: '3.6'
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:6.7.1
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.9.0
     container_name: elasticsearch
     hostname: elasticsearch
     environment:
       - cluster.name=elasticsearch_playground
-      - node.name=es01
+      - cluster.initial_master_nodes=elasticsearch
+      - node.name=elasticsearch
+      - network.host=172.25.0.2
       - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
     ulimits:
@@ -17,15 +19,18 @@ services:
       - esdata:/usr/share/elasticsearch/data
     ports:
       - 9200:9200
-    networks: 
-      - stack
+    networks:
+      app_net:
+        ipv4_address: 172.25.0.2
   elasticsearch2:
-    image: docker.elastic.co/elasticsearch/elasticsearch:6.7.1
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.9.0
     container_name: elasticsearch2
     hostname: elasticsearch2
     environment:
       - cluster.name=elasticsearch_playground
-      - node.name=es02
+      - cluster.initial_master_nodes=elasticsearch2
+      - node.name=elasticsearch2
+      - network.host=172.25.0.3
       - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
       - "discovery.zen.ping.unicast.hosts=elasticsearch"
@@ -35,10 +40,11 @@ services:
         hard: -1
     volumes:
       - esdata2:/usr/share/elasticsearch/data
-    networks: 
-      - stack
+    networks:
+      app_net:
+        ipv4_address: 172.25.0.3
   kibana:
-    image: docker.elastic.co/kibana/kibana:6.7.1
+    image: docker.elastic.co/kibana/kibana:7.9.0
     container_name: kibana
     hostname: kibana
     environment:
@@ -49,13 +55,14 @@ services:
     healthcheck:
         test: ["CMD", "curl", "-s", "-f", "http://localhost:5601/"]
         retries: 6
-    networks: 
-      - stack
+    networks:
+      app_net:
+        ipv4_address: 172.25.0.4
     depends_on: ['elasticsearch' ]
     restart: on-failure
   filebeat:
     user: root
-    image: docker.elastic.co/beats/filebeat:6.7.1
+    image: docker.elastic.co/beats/filebeat:7.9.0
     hostname: filebeat
     container_name: filebeat
     volumes:
@@ -71,7 +78,8 @@ services:
       KIBANA_HOSTS: kibana:5601
       ELASTICSEARCH_HOSTS: elasticsearch:9200
     networks:
-      - stack 
+      app_net:
+        ipv4_address: 172.25.0.5
     command: bash -c "filebeat setup --dashboards && filebeat -e -strict.perms=false"
     restart: on-failure
     depends_on: ['elasticsearch','kibana']
@@ -80,4 +88,8 @@ volumes:
   esdata2:
   filebeat_data:
 networks:
-  stack:
+  app_net:
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.25.0.0/16"
