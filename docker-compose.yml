@@ -1,13 +1,14 @@
 version: '3.6'
 services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.9.0
-    container_name: elasticsearch
-    hostname: elasticsearch
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.13.3
+    container_name: es01
+    hostname: es01
     environment:
       - cluster.name=elasticsearch_playground
-      - cluster.initial_master_nodes=elasticsearch
-      - node.name=elasticsearch
+      - cluster.initial_master_nodes=es01,es02
+      - discovery.seed_hosts=es02
+      - node.name=es01
       - network.host=172.25.0.2
       - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
@@ -22,71 +23,70 @@ services:
     networks:
       app_net:
         ipv4_address: 172.25.0.2
-  elasticsearch2:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.9.0
-    container_name: elasticsearch2
-    hostname: elasticsearch2
+  es02:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.13.3
+    container_name: es02
+    hostname: es02
     environment:
       - cluster.name=elasticsearch_playground
-      - cluster.initial_master_nodes=elasticsearch2
-      - node.name=elasticsearch2
+      - cluster.initial_master_nodes=es01,es02
+      - discovery.seed_hosts=es01
+      - node.name=es02
       - network.host=172.25.0.3
       - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
-      - "discovery.zen.ping.unicast.hosts=elasticsearch"
     ulimits:
       memlock:
         soft: -1
         hard: -1
     volumes:
       - esdata2:/usr/share/elasticsearch/data
+    ports:
+      - 9201:9200
     networks:
       app_net:
         ipv4_address: 172.25.0.3
   kibana:
-    image: docker.elastic.co/kibana/kibana:7.9.0
+    image: docker.elastic.co/kibana/kibana:7.13.3
     container_name: kibana
     hostname: kibana
     environment:
       SERVER_NAME: kibana
-      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_HOSTS: http://es01:9200
     ports:
       - 5601:5601
-    healthcheck:
-        test: ["CMD", "curl", "-s", "-f", "http://localhost:5601/"]
-        retries: 6
     networks:
       app_net:
         ipv4_address: 172.25.0.4
-    depends_on: ['elasticsearch' ]
+    depends_on: ['es01','es02' ]
     restart: on-failure
-  filebeat:
-    user: root
-    image: docker.elastic.co/beats/filebeat:7.9.0
-    hostname: filebeat
-    container_name: filebeat
-    volumes:
-        - ${PWD}/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-# needed to persist filebeat tracking data :
-        - "filebeat_data:/usr/share/filebeat/data:rw"
-# needed to access all docker logs (read only) :
-        - "/var/lib/docker/containers:/usr/share/dockerlogs/data:ro"
-# needed to access additional informations about containers
-        - "/var/run/docker.sock:/var/run/docker.sock"
-        - ${PWD}/filebeat_inputs/apache2/:/var/log/filebeat_inputs/apache2/
-    environment:
-      KIBANA_HOSTS: kibana:5601
-      ELASTICSEARCH_HOSTS: elasticsearch:9200
-    networks:
-      app_net:
-        ipv4_address: 172.25.0.5
-    command: bash -c "filebeat setup --dashboards && filebeat -e -strict.perms=false"
-    restart: on-failure
-    depends_on: ['elasticsearch','kibana']
+#  filebeat:
+#    user: root
+#    image: docker.elastic.co/beats/filebeat:7.13.3
+#    hostname: filebeat
+#    container_name: filebeat
+#    volumes:
+#        - ${PWD}/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+## needed to persist filebeat tracking data :
+#        - "filebeat_data:/usr/share/filebeat/data:rw"
+## needed to access all docker logs (read only) :
+#        - "/var/lib/docker/containers:/usr/share/dockerlogs/data:ro"
+## needed to access additional informations about containers
+#        - "/var/run/docker.sock:/var/run/docker.sock"
+#        - ${PWD}/filebeat_inputs/apache2/:/var/log/filebeat_inputs/apache2/
+#    environment:
+#      KIBANA_HOSTS: kibana:5601
+#      ELASTICSEARCH_HOSTS: es01:9200
+#    networks:
+#      app_net:
+#        ipv4_address: 172.25.0.5
+#    command: bash -c "filebeat setup --dashboards && filebeat -e -strict.perms=false"
+#    restart: on-failure
+#    depends_on: ['es01','es02','kibana']
 volumes:
   esdata:
   esdata2:
-  filebeat_data:
+#  filebeat_data:
 networks:
   app_net:
     ipam:
